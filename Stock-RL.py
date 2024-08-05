@@ -125,47 +125,8 @@ def strategy_simulation():
         plot_net_worth(net_worth)
 
 def performance_metrics():
-    st.header("Performance Metrics")
+    st.write("Performance Metrics Section (Coming Soon)")
     
-    data = pd.read_csv('all_stocks_5yr.csv')
-    names = list(data['Name'].unique())
-    names.insert(0, "<Select Names>")
-    
-    stock = st.sidebar.selectbox("Choose Company Stocks", names, index=0)
-    if stock != "<Select Names>":
-        stock_df = data_prep(data, stock)
-        
-        invest = st.sidebar.slider('Select a range of values', 1000, 1000000)
-        if st.sidebar.button("Calculate Performance Metrics", key=3):
-            q_table = pkl.load(open('pickl.pkl', 'rb'))
-            net_worth = test_stock(stock_df, q_table, invest)
-            
-            # Calculate performance metrics
-            daily_returns = pd.Series(net_worth).pct_change().dropna()
-            cumulative_return = (net_worth[-1] / net_worth[0]) - 1
-            annualized_return = np.mean(daily_returns) * 252
-            annualized_volatility = np.std(daily_returns) * np.sqrt(252)
-            sharpe_ratio = annualized_return / annualized_volatility
-            max_drawdown = calculate_max_drawdown(net_worth)
-            
-            # Display performance metrics
-            st.write(f"**Cumulative Return**: {cumulative_return:.2%}")
-            st.write(f"**Annualized Return**: {annualized_return:.2%}")
-            st.write(f"**Annualized Volatility**: {annualized_volatility:.2%}")
-            st.write(f"**Sharpe Ratio**: {sharpe_ratio:.2f}")
-            st.write(f"**Maximum Drawdown**: {max_drawdown:.2%}")
-
-            # Plot net worth
-            plot_net_worth(net_worth)
-
-def calculate_max_drawdown(net_worth):
-    net_worth_series = pd.Series(net_worth)
-    rolling_max = net_worth_series.cummax()
-    drawdown = net_worth_series / rolling_max - 1
-    max_drawdown = drawdown.min()
-    return max_drawdown
-
-
 if __name__ == '__main__':
     main()
 
