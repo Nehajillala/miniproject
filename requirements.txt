@@ -2,6 +2,8 @@ plotly
 numpy
 streamlit
 pandas
+tenserflow
+sklearn
 
 
 
