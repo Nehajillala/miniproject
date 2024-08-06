@@ -97,7 +97,7 @@ def main():
     names = list(data['Name'].unique())
     names.insert(0, "<Select Names>")
 
-    st.title("Optimizing Stock Trading Strategy With Deep Q-Network")
+    st.title("Enhancing Stock Trading Strategy With Deep Q-Network")
 
     st.sidebar.title("Choose Stock and Investment")
     st.sidebar.subheader("Choose Company Stocks")
