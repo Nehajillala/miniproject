@@ -8,7 +8,7 @@ from tensorflow.keras.layers import Dense
 from sklearn.preprocessing import StandardScaler
 
 # Data Preparation
-@st.cache_data
+@st.cache
 def data_prep(data, name):    
     df = pd.DataFrame(data[data['Name'] == name])
     df.dropna(inplace=True)    
@@ -102,39 +102,31 @@ def main():
     st.sidebar.title("Choose Stock and Investment")
     st.sidebar.subheader("Choose Company Stocks")
     stock = st.sidebar.selectbox("(*select one stock only)", names, index=0)
-    if stock != "<Select Names>":
-        stock_df = data_prep(data, stock)
+    stock_df = data_prep(data, stock)
+    
+    if st.sidebar.button("Show Stock Trend", key=1):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=stock_df['date'], y=stock_df['close'], mode='lines', name='Stock_Trend', line=dict(color='cyan', width=2)))
+        fig.update_layout(title='Stock Trend of ' + stock, xaxis_title='Date', yaxis_title='Price ($)')
+        st.plotly_chart(fig, use_container_width=True)
         
-        if st.sidebar.button("Show Stock Trend", key=1):
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=stock_df['date'], y=stock_df['close'], mode='lines', name='Stock_Trend', line=dict(color='cyan', width=2)))
-            fig.update_layout(title='Stock Trend of ' + stock, xaxis_title='Date', yaxis_title='Price ($)')
-            st.plotly_chart(fig, use_container_width=True)
-            
-            if stock_df.iloc[500]['close'] > stock_df.iloc[0]['close']:
-                st.markdown('<b><p style="font-family:Play; color:Cyan; font-size: 20px;">NOTE:<br>Stock is on a solid upward trend. Investing here might be profitable.</p>', unsafe_allow_html=True)
-            else:  
-                st.markdown('<b><p style="font-family:Play; color:Red; font-size: 20px;">NOTE:<br>Stock does not appear to be in a solid uptrend. Better not to invest here; instead, pick different stock.</p>', unsafe_allow_html=True)
+        if stock_df.iloc[500]['close'] > stock_df.iloc[0]['close']:
+            st.markdown('<b><p style="font-family:Play; color:Cyan; font-size: 20px;">NOTE:<br>Stock is on a solid upward trend. Investing here might be profitable.</p>', unsafe_allow_html=True)
+        else:  
+            st.markdown('<b><p style="font-family:Play; color:Red; font-size: 20px;">NOTE:<br>Stock does not appear to be in a solid uptrend. Better not to invest here; instead, pick different stock.</p>', unsafe_allow_html=True)
 
-        st.sidebar.subheader("Enter Your Available Initial Investment Fund")
-        invest = st.sidebar.slider('Select a range of values', 1000, 1000000)
-        if st.sidebar.button("Calculate", key=2):
-            model = train_dqn(stock_df, episodes=100)
-            net_worth = test_dqn(stock_df, model)
-            net_worth_df = pd.DataFrame(net_worth, columns=['value'])
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=net_worth_df.index, y=net_worth_df['value'], mode='lines', name='Portfolio Value', line=dict(color='cyan', width=2)))
-            fig.update_layout(title='Change in Portfolio Value Day by Day', xaxis_title='Number of Days since Feb 2013', yaxis_title='Value ($)')
-            st.plotly_chart(fig, use_container_width=True)
-            st.markdown('<b><p style="font-family:Play; color:Cyan; font-size: 20px;">NOTE:<br> Increase in your net worth as a result of a model decision.</p>', unsafe_allow_html=True)
+    st.sidebar.subheader("Enter Your Available Initial Investment Fund")
+    invest = st.sidebar.slider('Select a range of values', 1000, 1000000)
+    if st.sidebar.button("Calculate", key=2):
+        model = train_dqn(stock_df, episodes=100)
+        net_worth = test_dqn(stock_df, model)
+        net_worth_df = pd.DataFrame(net_worth, columns=['value'])
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=net_worth_df.index, y=net_worth_df['value'], mode='lines', name='Portfolio Value', line=dict(color='cyan', width=2)))
+        fig.update_layout(title='Change in Portfolio Value Day by Day', xaxis_title='Number of Days since Feb 2013', yaxis_title='Value ($)')
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('<b><p style="font-family:Play; color:Cyan; font-size: 20px;">NOTE:<br> Increase in your net worth as a result of a model decision.</p>', unsafe_allow_html=True)
 
 if __name__ == '__main__':
     main()
-
-
-
-            
- 
- 
-       
 
