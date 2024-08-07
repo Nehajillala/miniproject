@@ -2,8 +2,7 @@ plotly
 numpy
 streamlit
 pandas
-tensorflow
-scikit-learn
+
 
 
 
