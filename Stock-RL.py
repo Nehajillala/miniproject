@@ -133,13 +133,23 @@ def show_stock_trend(stock, stock_df):
         fig.update_layout(title='Stock Trend of ' + stock, xaxis_title='Date', yaxis_title='Price ($)')
         st.plotly_chart(fig, use_container_width=True)
         
-        # Update the trend note based on the stock trend
-        if stock_df.iloc[-1]['close'] > stock_df.iloc[0]['close']:
+        # Get the start and end prices
+        start_price = stock_df.iloc[0]['close']
+        end_price = stock_df.iloc[-1]['close']
+        
+        # Determine the trend note based on the stock trend
+        if end_price > start_price:
             trend_note = 'Stock is on a solid upward trend. Investing here might be profitable.'
         else:
             trend_note = 'Stock does not appear to be in a solid uptrend. Better not to invest here; instead, pick a different stock.'
-            
+        
+        # Display the trend note
         st.markdown(f'<b><p style="font-family:Play; color:Cyan; font-size: 20px;">NOTE:<br> {trend_note}</p>', unsafe_allow_html=True)
+        
+        # Log the start and end prices for debugging
+        st.write(f"Start Price: {start_price}")
+        st.write(f"End Price: {end_price}")
+
 
 def strategy_simulation():
     data = pd.read_csv('all_stocks_5yr.csv')
