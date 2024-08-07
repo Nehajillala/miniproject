@@ -1,130 +1,157 @@
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+import pickle as pkl
 
-# Data Preparation
+# Cache the data preparation function
 @st.cache
 def data_prep(data, name):
-    df = data[data['Name'] == name].copy()
+    df = pd.DataFrame(data[data['Name'] == name])
     df.dropna(inplace=True)
     df.reset_index(drop=True, inplace=True)
-    df['5day_MA'] = df['close'].rolling(window=5).mean().fillna(0)
-    df['1day_MA'] = df['close'].rolling(window=1).mean()
+    df['5day_MA'] = df['close'].rolling(5).mean()
+    df['1day_MA'] = df['close'].rolling(1).mean()
+    df['5day_MA'][:4] = 0
     return df
 
-# Build DQN Model
-def build_dqn_model(input_dim):
-    model = Sequential([
-        Dense(64, input_dim=input_dim, activation='relu'),
-        Dense(32, activation='relu'),
-        Dense(3, activation='linear')  # 3 actions: buy, sell, hold
-    ])
-    model.compile(optimizer='adam', loss='mse')
-    return model
+# Cache the state calculation function
+@st.cache
+def get_state(long_ma, short_ma, t):
+    if short_ma < long_ma:
+        return (0, 1) if t == 1 else (0, 0)
+    else:
+        return (1, 1) if t == 1 else (1, 0)
 
-# Get State
-def get_state(df, t):
-    state = np.array([
-        df.iloc[t]['5day_MA'],
-        df.iloc[t]['1day_MA'],
-        df.iloc[t]['close']
-    ])
-    return state
+# Cache the trade determination function
+@st.cache
+def trade_t(num_of_stocks, port_value, current_price):
+    return 1 if port_value > current_price else 0
 
-# Epsilon-Greedy Strategy
-def epsilon_greedy_policy(state, model, epsilon):
-    if np.random.rand() < epsilon:
-        return np.random.randint(3)  # Random action
-    q_values = model.predict(state.reshape(1, -1))
-    return np.argmax(q_values)  # Best action
+# Cache the next action function
+@st.cache
+def next_act(state, qtable, epsilon, action=3):
+    return np.random.randint(action) if np.random.rand() < epsilon else np.argmax(qtable[state])
 
-# Train DQN
-def train_dqn(df, episodes, gamma=0.95, epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.995):
-    model = build_dqn_model(input_dim=3)
-    for _ in range(episodes):
-        state = get_state(df, 0)
-        total_profit = 0
-        for t in range(len(df) - 1):
-            action = epsilon_greedy_policy(state, model, epsilon)
-            next_state = get_state(df, t + 1)
-            reward = 0
-            if action == 0:  # Buy
-                total_profit -= df.iloc[t]['close']
-            elif action == 1:  # Sell
-                total_profit += df.iloc[t]['close']
-                reward = total_profit
-            elif action == 2:  # Hold
-                reward = 0
+# Cache the stock testing function
+@st.cache
+def test_stock(stocks_test, q_table, invest):
+    num_stocks = 0
+    epsilon = 0
+    net_worth = [invest]
+    np.random.seed()
 
-            q_update = reward + gamma * np.max(model.predict(next_state.reshape(1, -1)))
-            q_values = model.predict(state.reshape(1, -1))
-            q_values[0][action] = q_update
+    for dt in range(len(stocks_test)):
+        long_ma = stocks_test.iloc[dt]['5day_MA']
+        short_ma = stocks_test.iloc[dt]['1day_MA']
+        close_price = stocks_test.iloc[dt]['close']
+        t = trade_t(num_stocks, net_worth[-1], close_price)
+        state = get_state(long_ma, short_ma, t)
+        action = next_act(state, q_table, epsilon)
 
-            model.fit(state.reshape(1, -1), q_values, epochs=1, verbose=0)
-            state = next_state
-
-            if epsilon > epsilon_min:
-                epsilon *= epsilon_decay
-                
-    return model
-
-# Testing DQN
-def test_dqn(df, model):
-    state = get_state(df, 0)
-    total_profit = 0
-    net_worth = [10000]  # Initial investment
-    for t in range(len(df) - 1):
-        action = epsilon_greedy_policy(state, model, epsilon=0.0)
-        next_state = get_state(df, t + 1)
         if action == 0:  # Buy
-            total_profit -= df.iloc[t]['close']
+            num_stocks += 1
+            net_worth.append(np.round(net_worth[-1] - close_price, 1))
         elif action == 1:  # Sell
-            total_profit += df.iloc[t]['close']
-        net_worth.append(net_worth[-1] + total_profit)
-        state = next_state
+            num_stocks -= 1
+            net_worth.append(np.round(net_worth[-1] + close_price, 1))
+        elif action == 2:  # Hold
+            net_worth.append(np.round(net_worth[-1], 1))
+
+        try:
+            next_state = get_state(stocks_test.iloc[dt + 1]['5day_MA'], stocks_test.iloc[dt + 1]['1day_MA'], t)
+        except:
+            break
+
     return net_worth
 
-# Streamlit App
+# Function to plot net worth
+def plot_net_worth(net_worth):
+    net_worth_df = pd.DataFrame(net_worth, columns=['value'])
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=net_worth_df.index, y=net_worth_df['value'], mode='lines', name='Portfolio Value', line=dict(color='cyan', width=2)))
+    fig.update_layout(title='Change in Portfolio Value Day by Day', xaxis_title='Number of Days since Feb 2013', yaxis_title='Value ($)')
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown('<b><p style="font-family:Play; color:Cyan; font-size: 20px;">NOTE:<br> Increase in your net worth as a result of a model decision.</p>', unsafe_allow_html=True)
+
+# Function to calculate performance metrics
+def calculate_performance_metrics(net_worth, initial_investment):
+    net_worth = np.array(net_worth)
+    returns = (net_worth[-1] - initial_investment) / initial_investment
+    annualized_return = (net_worth[-1] / initial_investment) ** (365 / len(net_worth)) - 1
+    daily_returns = np.diff(net_worth) / net_worth[:-1]
+    volatility = np.std(daily_returns)
+    sharpe_ratio = annualized_return / volatility
+
+    return {
+        "Total Return": returns,
+        "Annualized Return": annualized_return,
+        "Volatility": volatility,
+        "Sharpe Ratio": sharpe_ratio
+    }
+
+# Function to display performance metrics
+def display_performance_metrics(metrics):
+    st.write("### Performance Metrics")
+    for key, value in metrics.items():
+        st.write(f"**{key}:** {value:.2f}")
+
+# Main application function
 def main():
-    st.set_page_config(page_title="Stock Trading Strategy", layout="wide")
-    st.title("Stock Trading Strategy With Deep Q-Network")
+    st.title("Optimizing Stock Trading Strategy With Reinforcement Learning")
+    
+    tabs = ["Home", "Data Exploration", "Strategy Simulation", "Performance Metrics"]
+    selected_tab = st.sidebar.selectbox("Select a tab", tabs)
 
-    # Upload CSV
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-    if uploaded_file is not None:
-        data = pd.read_csv(uploaded_file)
-        data['date'] = pd.to_datetime(data['date'])
-        data = data[['date', 'open', 'high', 'low', 'close', 'volume', 'Name']].dropna()
-        data.reset_index(drop=True, inplace=True)
+    if selected_tab == "Home":
+        st.write("Welcome to the Stock Trading Strategy Optimizer!")
+        st.write("Select a tab to get started.")
+    
+    elif selected_tab == "Data Exploration":
+        data_exploration()
+    
+    elif selected_tab == "Strategy Simulation":
+        strategy_simulation()
+    
+    elif selected_tab == "Performance Metrics":
+        performance_metrics()
 
-        st.write("Data Overview:")
-        st.dataframe(data.head())
-
-        st.sidebar.title("Choose Stock and Investment")
-        stock = st.sidebar.selectbox("Select Stock", data['Name'].unique())
+def data_exploration():
+    data = pd.read_csv('all_stocks_5yr.csv')
+    names = list(data['Name'].unique())
+    names.insert(0, "<Select Names>")
+    
+    stock = st.sidebar.selectbox("Choose Company Stocks", names, index=0)
+    if stock != "<Select Names>":
         stock_df = data_prep(data, stock)
+        show_stock_trend(stock, stock_df)
 
-        if st.sidebar.button("Show Stock Trend"):
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=stock_df['date'], y=stock_df['close'], mode='lines', name='Close'))
-            fig.add_trace(go.Scatter(x=stock_df['date'], y=stock_df['5day_MA'], mode='lines', name='5-Day MA'))
-            fig.update_layout(title=f'Stock Trend for {stock}', xaxis_title='Date', yaxis_title='Price')
-            st.plotly_chart(fig, use_container_width=True)
+def show_stock_trend(stock, stock_df):
+    if st.sidebar.button("Show Stock Trend", key=1):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=stock_df['date'], y=stock_df['close'], mode='lines', name='Stock_Trend', line=dict(color='cyan', width=2)))
+        fig.update_layout(title='Stock Trend of ' + stock, xaxis_title='Date', yaxis_title='Price ($)')
+        st.plotly_chart(fig, use_container_width=True)
+        trend_note = 'Stock is on a solid upward trend. Investing here might be profitable.' if stock_df.iloc[500]['close'] > stock_df.iloc[0]['close'] else 'Stock does not appear to be in a solid uptrend. Better not to invest here; instead, pick a different stock.'
+        st.markdown(f'<b><p style="font-family:Play; color:Cyan; font-size: 20px;">NOTE:<br> {trend_note}</p>', unsafe_allow_html=True)
 
-        invest = st.sidebar.slider('Initial Investment', 1000, 1000000, value=10000)
-        if st.sidebar.button("Calculate"):
-            with st.spinner("Training the model..."):
-                model = train_dqn(stock_df, episodes=100)
-                net_worth = test_dqn(stock_df, model)
-                net_worth_df = pd.DataFrame(net_worth, columns=['Value'])
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=net_worth_df.index, y=net_worth_df['Value'], mode='lines', name='Portfolio Value'))
-                fig.update_layout(title='Portfolio Value Over Time', xaxis_title='Days', yaxis_title='Value ($)')
-                st.plotly_chart(fig, use_container_width=True)
-                st.markdown('**NOTE:** Increase in net worth based on model decisions.')
+def strategy_simulation():
+    st.sidebar.subheader("Enter Your Available Initial Investment Fund")
+    invest = st.sidebar.slider('Select a range of values', 1000, 1000000)
+    if st.sidebar.button("Calculate", key=2):
+        data = pd.read_csv('all_stocks_5yr.csv')
+        stock = st.sidebar.selectbox("Choose Company Stocks", list(data['Name'].unique()), index=0)
+        stock_df = data_prep(data, stock)
+        q_table = pkl.load(open('pickl.pkl', 'rb'))
+        net_worth = test_stock(stock_df, q_table, invest)
+        plot_net_worth(net_worth)
+        metrics = calculate_performance_metrics(net_worth, invest)
+        display_performance_metrics(metrics)
+
+def performance_metrics():
+    st.write("### Performance Metrics Section")
+    st.write("Please select a stock and run the strategy simulation to view performance metrics.")
 
 if __name__ == '__main__':
     main()
+
