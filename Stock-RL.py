@@ -113,6 +113,18 @@ def data_exploration(data, names):
             st.write(f"Start Price: {start_price}")
             st.write(f"End Price: {end_price}")
 
+    st.header("Summary of Stock Trends")
+    summary = []
+    for name in names[1:]:
+        stock_df = data_prep(data, name)
+        start_price = stock_df.iloc[0]['close']
+        end_price = stock_df.iloc[-1]['close']
+        trend = "Upward" if end_price > start_price else "Downward"
+        summary.append((name, trend))
+    
+    summary_df = pd.DataFrame(summary, columns=["Stock", "Trend"])
+    st.dataframe(summary_df)
+    
 def strategy_simulation(data, names):
     st.header("Strategy Simulation")
     stock = st.sidebar.selectbox("Choose Company Stocks", names, index=0)
@@ -155,6 +167,11 @@ def display_performance_metrics(metrics):
     for key, value in metrics.items():
         st.write(f"**{key}:** {value:.2f}")
 
+def performance_metrics():
+    st.header("Performance Metrics")
+    st.write("Please select a stock and run the strategy simulation to view performance metrics.")
+
 if __name__ == '__main__':
     main()
+
 
