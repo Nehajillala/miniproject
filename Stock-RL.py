@@ -70,7 +70,7 @@ def plot_net_worth(net_worth):
     net_worth_df = pd.DataFrame(net_worth, columns=['value'])
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=net_worth_df.index, y=net_worth_df['value'], mode='lines', name='Portfolio Value', line=dict(color='cyan', width=2)))
-    fig.update_layout(title='Change in Portfolio Value Day by Day', xaxis_title='Number of Days since Feb 2013', yaxis_title='Value ($)')
+    fig.update_layout(title='Change in Portfolio Value Day by Day', xaxis_title='Number of Days since Start', yaxis_title='Value ($)')
     st.plotly_chart(fig, use_container_width=True)
     st.markdown('<b><p style="font-family:Play; color:Cyan; font-size: 20px;">NOTE:<br> Increase in your net worth as a result of a model decision.</p>', unsafe_allow_html=True)
 
@@ -150,13 +150,11 @@ def show_stock_trend(stock, stock_df):
         st.write(f"Start Price: {start_price}")
         st.write(f"End Price: {end_price}")
 
-
 def strategy_simulation():
     data = pd.read_csv('all_stocks_5yr.csv')
     stock = st.sidebar.selectbox("Choose Company Stocks", list(data['Name'].unique()), index=0)
     st.sidebar.subheader("Enter Your Available Initial Investment Fund")
     invest = st.sidebar.slider('Select a range of values', 1000, 1000000)
-    
     if st.sidebar.button("Calculate", key=2):
         stock_df = data_prep(data, stock)
         q_table = pkl.load(open('pickl.pkl', 'rb'))
