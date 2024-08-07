@@ -5,6 +5,9 @@ import plotly.graph_objects as go
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+import time
 
 # Data Preparation
 @st.cache
@@ -120,7 +123,8 @@ def main():
 
         invest = st.sidebar.slider('Initial Investment', 1000, 1000000)
         if st.sidebar.button("Calculate"):
-            model = train_dqn(stock_df, episodes=100)
+            start_time = time.time()  # Measure time to monitor performance
+            model = train_dqn(stock_df, episodes=20)  # Reduced epochs for quicker training
             net_worth = test_dqn(stock_df, model)
             net_worth_df = pd.DataFrame(net_worth, columns=['Value'])
             fig = go.Figure()
@@ -128,6 +132,8 @@ def main():
             fig.update_layout(title='Portfolio Value Over Time', xaxis_title='Days', yaxis_title='Value ($)')
             st.plotly_chart(fig, use_container_width=True)
             st.markdown('**NOTE:** Increase in net worth based on model decisions.')
+            end_time = time.time()
+            st.write(f"Computation Time: {end_time - start_time:.2f} seconds")  # Display computation time
 
 if __name__ == '__main__':
     main()
