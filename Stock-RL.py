@@ -2,30 +2,26 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
-import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import time
 
 # Data Preparation
 @st.cache
 def data_prep(data, name):
-    df = pd.DataFrame(data[data['Name'] == name])
+    df = data[data['Name'] == name].copy()
     df.dropna(inplace=True)
     df.reset_index(drop=True, inplace=True)
-    df['5day_MA'] = df['close'].rolling(window=5).mean()
+    df['5day_MA'] = df['close'].rolling(window=5).mean().fillna(0)
     df['1day_MA'] = df['close'].rolling(window=1).mean()
-    df['5day_MA'].iloc[:4] = 0  # Setting initial values to 0
     return df
 
 # Build DQN Model
 def build_dqn_model(input_dim):
-    model = Sequential()
-    model.add(Dense(64, input_dim=input_dim, activation='relu'))
-    model.add(Dense(32, activation='relu'))
-    model.add(Dense(3, activation='linear'))  # 3 actions: buy, sell, hold
+    model = Sequential([
+        Dense(64, input_dim=input_dim, activation='relu'),
+        Dense(32, activation='relu'),
+        Dense(3, activation='linear')  # 3 actions: buy, sell, hold
+    ])
     model.compile(optimizer='adam', loss='mse')
     return model
 
@@ -42,14 +38,13 @@ def get_state(df, t):
 def epsilon_greedy_policy(state, model, epsilon):
     if np.random.rand() < epsilon:
         return np.random.randint(3)  # Random action
-    else:
-        q_values = model.predict(state.reshape(1, -1))
-        return np.argmax(q_values)  # Best action
+    q_values = model.predict(state.reshape(1, -1))
+    return np.argmax(q_values)  # Best action
 
 # Train DQN
 def train_dqn(df, episodes, gamma=0.95, epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.995):
     model = build_dqn_model(input_dim=3)
-    for e in range(episodes):
+    for _ in range(episodes):
         state = get_state(df, 0)
         total_profit = 0
         for t in range(len(df) - 1):
@@ -94,6 +89,7 @@ def test_dqn(df, model):
 
 # Streamlit App
 def main():
+    st.set_page_config(page_title="Stock Trading Strategy", layout="wide")
     st.title("Stock Trading Strategy With Deep Q-Network")
 
     # Upload CSV
@@ -101,14 +97,11 @@ def main():
     if uploaded_file is not None:
         data = pd.read_csv(uploaded_file)
         data['date'] = pd.to_datetime(data['date'])
-        data.dropna(inplace=True)
+        data = data[['date', 'open', 'high', 'low', 'close', 'volume', 'Name']].dropna()
         data.reset_index(drop=True, inplace=True)
-        data['5day_MA'] = data['close'].rolling(window=5).mean()
-        data['1day_MA'] = data['close'].rolling(window=1).mean()
-        data['5day_MA'].iloc[:4] = 0
 
         st.write("Data Overview:")
-        st.write(data.head())
+        st.dataframe(data.head())
 
         st.sidebar.title("Choose Stock and Investment")
         stock = st.sidebar.selectbox("Select Stock", data['Name'].unique())
@@ -121,19 +114,17 @@ def main():
             fig.update_layout(title=f'Stock Trend for {stock}', xaxis_title='Date', yaxis_title='Price')
             st.plotly_chart(fig, use_container_width=True)
 
-        invest = st.sidebar.slider('Initial Investment', 1000, 1000000)
+        invest = st.sidebar.slider('Initial Investment', 1000, 1000000, value=10000)
         if st.sidebar.button("Calculate"):
-            start_time = time.time()  # Measure time to monitor performance
-            model = train_dqn(stock_df, episodes=20)  # Reduced epochs for quicker training
-            net_worth = test_dqn(stock_df, model)
-            net_worth_df = pd.DataFrame(net_worth, columns=['Value'])
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=net_worth_df.index, y=net_worth_df['Value'], mode='lines', name='Portfolio Value'))
-            fig.update_layout(title='Portfolio Value Over Time', xaxis_title='Days', yaxis_title='Value ($)')
-            st.plotly_chart(fig, use_container_width=True)
-            st.markdown('**NOTE:** Increase in net worth based on model decisions.')
-            end_time = time.time()
-            st.write(f"Computation Time: {end_time - start_time:.2f} seconds")  # Display computation time
+            with st.spinner("Training the model..."):
+                model = train_dqn(stock_df, episodes=100)
+                net_worth = test_dqn(stock_df, model)
+                net_worth_df = pd.DataFrame(net_worth, columns=['Value'])
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=net_worth_df.index, y=net_worth_df['Value'], mode='lines', name='Portfolio Value'))
+                fig.update_layout(title='Portfolio Value Over Time', xaxis_title='Days', yaxis_title='Value ($)')
+                st.plotly_chart(fig, use_container_width=True)
+                st.markdown('**NOTE:** Increase in net worth based on model decisions.')
 
 if __name__ == '__main__':
     main()
