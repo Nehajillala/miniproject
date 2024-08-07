@@ -3,7 +3,7 @@ numpy
 streamlit
 pandas
 tensorflow
- scikit-learn
+scikit-learn
 
 
 
