@@ -132,15 +132,22 @@ def show_stock_trend(stock, stock_df):
         fig.add_trace(go.Scatter(x=stock_df['date'], y=stock_df['close'], mode='lines', name='Stock_Trend', line=dict(color='cyan', width=2)))
         fig.update_layout(title='Stock Trend of ' + stock, xaxis_title='Date', yaxis_title='Price ($)')
         st.plotly_chart(fig, use_container_width=True)
-        trend_note = 'Stock is on a solid upward trend. Investing here might be profitable.' if stock_df.iloc[500]['close'] > stock_df.iloc[0]['close'] else 'Stock does not appear to be in a solid uptrend. Better not to invest here; instead, pick a different stock.'
+        
+        # Update the trend note based on the stock trend
+        if stock_df.iloc[-1]['close'] > stock_df.iloc[0]['close']:
+            trend_note = 'Stock is on a solid upward trend. Investing here might be profitable.'
+        else:
+            trend_note = 'Stock does not appear to be in a solid uptrend. Better not to invest here; instead, pick a different stock.'
+            
         st.markdown(f'<b><p style="font-family:Play; color:Cyan; font-size: 20px;">NOTE:<br> {trend_note}</p>', unsafe_allow_html=True)
 
 def strategy_simulation():
+    data = pd.read_csv('all_stocks_5yr.csv')
+    stock = st.sidebar.selectbox("Choose Company Stocks", list(data['Name'].unique()), index=0)
     st.sidebar.subheader("Enter Your Available Initial Investment Fund")
     invest = st.sidebar.slider('Select a range of values', 1000, 1000000)
+    
     if st.sidebar.button("Calculate", key=2):
-        data = pd.read_csv('all_stocks_5yr.csv')
-        stock = st.sidebar.selectbox("Choose Company Stocks", list(data['Name'].unique()), index=0)
         stock_df = data_prep(data, stock)
         q_table = pkl.load(open('pickl.pkl', 'rb'))
         net_worth = test_stock(stock_df, q_table, invest)
